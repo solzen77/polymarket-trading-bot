@@ -15,6 +15,16 @@ pub struct Args {
     #[arg(long)]
     pub no_simulation: bool,
 
+    /// Run in backtest mode (use historical price data)
+    /// This overrides simulation and production modes
+    #[arg(long)]
+    pub backtest: bool,
+
+    /// Replay a history file from the history folder (e.g. market_12345_prices.toml).
+    /// Loads historical prices and runs buying/hedge logic (trailing stop) to show what would have happened. No real orders.
+    #[arg(long)]
+    pub history_file: Option<PathBuf>,
+
     /// Configuration file path
     #[arg(short, long, default_value = "config.json")]
     pub config: PathBuf,
@@ -23,22 +33,37 @@ pub struct Args {
 impl Args {
     /// Get the effective simulation mode
     /// If --no-simulation is used, it overrides the default
+    /// If --backtest is used, it overrides everything
     pub fn is_simulation(&self) -> bool {
-        if self.no_simulation {
+        if self.backtest {
+            false // Backtest is not simulation (it's a separate mode)
+        } else if self.no_simulation {
             false
         } else {
             self.simulation
         }
+    }
+
+    /// Check if we're in backtest mode
+    pub fn is_backtest(&self) -> bool {
+        self.backtest
+    }
+
+    /// Check if we're in history-file replay mode
+    pub fn is_history_replay(&self) -> bool {
+        self.history_file.is_some()
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub polymarket: PolymarketConfig,
+    #[serde(default)]
     pub trading: TradingConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PolymarketConfig {
     pub gamma_api_url: String,
     pub clob_api_url: String,
@@ -61,6 +86,7 @@ pub struct PolymarketConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TradingConfig {
     pub eth_condition_id: Option<String>,
     pub btc_condition_id: Option<String>,
@@ -100,6 +126,9 @@ pub struct TradingConfig {
     /// Default: 30 (30 seconds) - don't buy if less than 30 seconds remain
     /// This prevents buying too close to market close when prices can be volatile
     pub min_time_remaining_seconds: Option<u64>,
+    /// Enable BTC market trading (trailing bot and others that support it)
+    /// Default: true. If false, trailing bot will not trade BTC (e.g. use with enable_xrp_trading for XRP-only).
+    pub enable_btc_trading: bool,
     /// Enable ETH market trading
     /// Default: true (ETH trading enabled)
     /// If false, only BTC markets will be traded
@@ -116,42 +145,95 @@ pub struct TradingConfig {
     pub dual_limit_price: Option<f64>,
     /// Dual limit-start bot: fixed number of shares per order
     pub dual_limit_shares: Option<f64>,
+    /// Dual limit-start bot: after this many minutes, if only one side filled, begin hedging the unfilled side
+    /// Default: 10 (minutes)
+    pub dual_limit_hedge_after_minutes: Option<u64>,
+    /// Dual limit-start bot: hedge trigger/limit price for buying the unfilled side
+    /// Default: 0.85 ($0.85)
+    pub dual_limit_hedge_price: Option<f64>,
+    /// Dual limit-start bot: early hedge check time (minutes) - check earlier if multiple markets unfilled or uptrending
+    /// Default: 5 (minutes)
+    pub dual_limit_early_hedge_minutes: Option<u64>,
+    /// Dual limit-start bot: minimum trend strength (0.0-1.0) to trigger early hedge
+    /// Default: 0.3
+    pub dual_limit_trend_strength_threshold: Option<f64>,
+    /// Dual limit-start bot: price buffer for early hedge (hedge if price >= hedge_price - buffer and uptrending)
+    /// Default: 0.05 ($0.05)
+    pub dual_limit_trend_price_buffer: Option<f64>,
+    /// Dual limit-start bot: number of price snapshots to track for trend analysis
+    /// Default: 20
+    pub dual_limit_trend_history_size: Option<usize>,
+    /// Dual limit same-size: when false, do not place any limit sell when both 0.45 limit orders fill (hold until closure).
+    /// Used by main_dual_limit_045_same_size; None = use trade's no_sell only.
+    pub dual_filled_limit_sell_enabled: Option<bool>,
+    /// Trailing stop point (dual-limit same-size and trailing bot). Legacy: trigger when unfilled price <= trailing_min + this. In config.json: "trailing_stop_point": 0.02
+    pub trailing_stop_point: Option<f64>,
+    /// Dual limit same-size 2-min hedge: trigger when unfilled price goes UP by this amount over lowest (current >= lowest + this), then buy at current ask. In config.json: "dual_limit_hedge_trailing_stop": 0.03
+    pub dual_limit_hedge_trailing_stop: Option<f64>,
+    /// Trailing bot: exact number of shares to buy per token (first and second buy).
+    pub trailing_shares: Option<f64>,
+    /// 5m dual-limit: when true, use trailing-buy mode (no limit orders; monitor token with ask > 0.55, track highest, buy when ask <= highest - trailing_stop; then second trailing for opposite with band from first bought price). When false, use limit-order mode (place Up/Down at dual_limit_price).
+    pub dual_limit_trailing_buy_mode: Option<bool>,
+}
+
+impl Default for PolymarketConfig {
+    fn default() -> Self {
+        Self {
+            gamma_api_url: "https://gamma-api.polymarket.com".to_string(),
+            clob_api_url: "https://clob.polymarket.com".to_string(),
+            api_key: None,
+            api_secret: None,
+            api_passphrase: None,
+            private_key: None,
+            proxy_wallet_address: None,
+            signature_type: None,
+        }
+    }
+}
+
+impl Default for TradingConfig {
+    fn default() -> Self {
+        Self {
+            eth_condition_id: None,
+            btc_condition_id: None,
+            solana_condition_id: None,
+            xrp_condition_id: None,
+            check_interval_ms: 1000,
+            fixed_trade_amount: 1.0,
+            trigger_price: 0.9,
+            min_elapsed_minutes: 10,
+            sell_price: 0.99,
+            max_buy_price: Some(0.95),
+            stop_loss_price: Some(0.85),
+            hedge_price: Some(0.5),
+            market_closure_check_interval_seconds: 10,
+            min_time_remaining_seconds: Some(30),
+            enable_btc_trading: true,
+            enable_eth_trading: true,
+            enable_solana_trading: false,
+            enable_xrp_trading: false,
+            dual_limit_price: None,
+            dual_limit_shares: None,
+            dual_limit_hedge_after_minutes: Some(10),
+            dual_limit_hedge_price: Some(0.85),
+            dual_limit_early_hedge_minutes: Some(5),
+            dual_limit_trend_strength_threshold: Some(0.3),
+            dual_limit_trend_price_buffer: Some(0.05),
+            dual_limit_trend_history_size: Some(60),
+            dual_filled_limit_sell_enabled: None,
+            trailing_stop_point: Some(0.03),
+            dual_limit_hedge_trailing_stop: Some(0.03),
+            trailing_shares: Some(10.0),
+            dual_limit_trailing_buy_mode: Some(false),
+        }
+    }
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            polymarket: PolymarketConfig {
-                gamma_api_url: "https://gamma-api.polymarket.com".to_string(),
-                clob_api_url: "https://clob.polymarket.com".to_string(),
-                api_key: None,
-                api_secret: None,
-                api_passphrase: None,
-                private_key: None,
-                proxy_wallet_address: None,
-                signature_type: None,
-            },
-            trading: TradingConfig {
-                eth_condition_id: None,
-                btc_condition_id: None,
-                solana_condition_id: None,
-                xrp_condition_id: None,
-                check_interval_ms: 1000,
-                fixed_trade_amount: 1.0, // $1.00
-                trigger_price: 0.9, // $0.90 trigger price
-                min_elapsed_minutes: 10, // 10 minutes must have elapsed
-                sell_price: 0.99, // Sell at $0.99
-                max_buy_price: Some(0.95), // Maximum price to buy at ($0.95)
-                stop_loss_price: Some(0.85), // Stop-loss at $0.85 (sell if price drops below this)
-                hedge_price: Some(0.5), // Hedge price at $0.5 (limit buy for opposite token)
-                market_closure_check_interval_seconds: 10, // 10 seconds - faster redemption retries
-                min_time_remaining_seconds: Some(30), // 30 seconds - don't buy if less time remains
-                enable_eth_trading: true, // ETH trading enabled by default
-                enable_solana_trading: false, // Solana trading disabled by default
-                enable_xrp_trading: false, // XRP trading disabled by default
-                dual_limit_price: None,
-                dual_limit_shares: None,
-            },
+            polymarket: PolymarketConfig::default(),
+            trading: TradingConfig::default(),
         }
     }
 }

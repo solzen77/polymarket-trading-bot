@@ -131,6 +131,7 @@ pub struct PendingTrade {
     pub token_id: String,             // Token ID (can be BTC Up/Down, ETH Up/Down)
     pub condition_id: String,          // Market condition ID (BTC or ETH)
     pub token_type: crate::detector::TokenType, // Type of token
+    pub order_id: Option<String>,      // Associated CLOB order id (primarily for limit orders)
     pub investment_amount: f64,       // Fixed trade amount
     pub units: f64,                   // Total token shares purchased (expected)
     pub purchase_price: f64,          // Price at which token was purchased (BID)

@@ -11,8 +11,8 @@
 
 use anyhow::Result;
 use clap::Parser;
-use polymarket_arbitrage_bot::merge::{merge_up_down_amounts, MergeResult};
-use polymarket_arbitrage_bot::{Config, PolymarketApi};
+use polymarket_trading_bot::merge::{merge_up_down_amounts, MergeResult};
+use polymarket_trading_bot::{Config, PolymarketApi};
 
 #[derive(Parser, Debug)]
 #[command(name = "test_merge")]

@@ -1,11 +1,11 @@
 use anyhow::{Result, Context};
 use clap::Parser;
 use rust_decimal::Decimal;
-use polymarket_arbitrage_bot::{PolymarketApi, Config};
+use polymarket_trading_bot::{PolymarketApi, Config};
 use std::str::FromStr;
 use alloy::signers::local::LocalSigner;
 use alloy::signers::Signer as _;
-use polymarket_arbitrage_bot::clob_sdk_ffi;
+use polymarket_trading_bot::clob_sdk;
 
 #[derive(Parser, Debug)]
 #[command(name = "test_allowance")]
@@ -82,7 +82,7 @@ async fn main() -> Result<()> {
         } else if let Some(pk) = &config.polymarket.private_key {
             let signer = LocalSigner::from_str(pk)
                 .context("Failed to create signer from private key")?
-                .with_chain_id(Some(clob_sdk_ffi::polygon()));
+                .with_chain_id(Some(clob_sdk::polygon()));
             println!("   Wallet: {:#x} (EOA)", signer.address());
         } else {
             anyhow::bail!("Need either proxy_wallet_address or private_key to check approvals");

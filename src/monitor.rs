@@ -33,6 +33,18 @@ pub struct MarketMonitor {
     simulation_mode: bool,
     price_monitor_file: Option<Arc<tokio::sync::Mutex<std::fs::File>>>, // File for logging price monitoring data in simulation mode
     market_price_files: Arc<tokio::sync::Mutex<std::collections::HashMap<String, Arc<tokio::sync::Mutex<std::fs::File>>>>>, // Per-market price files
+    /// Period duration in seconds (e.g. 900 for 15m, 300 for 5m). Used for time_remaining fallback and period rounding.
+    period_seconds: u64,
+    /// If false, omit ETH from the one-line price log (efficient logging when ETH trading disabled).
+    log_enable_eth: bool,
+    log_enable_solana: bool,
+    log_enable_xrp: bool,
+    /// Current Chainlink BTC/USD from RTDS (optional). When set, price line shows BTC price, price-to-beat, and diff.
+    chainlink_btc: Option<Arc<tokio::sync::Mutex<Option<f64>>>>,
+    /// Per-period Chainlink price at first sight (used as "price to beat" for logging).
+    price_to_beat_cache: Option<Arc<tokio::sync::Mutex<std::collections::HashMap<u64, f64>>>>,
+    /// Optional trailing status string (e.g. "trail: Up low=0.41 trig=0.44 band=0.50"). When set by the binary, appended to the price line.
+    trailing_status_line: Option<Arc<tokio::sync::Mutex<String>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +59,10 @@ pub struct MarketSnapshot {
 }
 
 impl MarketMonitor {
+    /// Create a new MarketMonitor.
+    /// enable_eth_trading, enable_solana_trading, enable_xrp_trading: if Some(false), that market is omitted from the one-line price log.
+    /// chainlink_btc: when Some(arc), the price line will include Chainlink BTC price, price-to-beat (at period start), and difference.
+    /// trailing_status_line: when Some(arc), the price line will append the string (e.g. trailing lowest/trigger/band for 5m BTC).
     pub fn new(
         api: Arc<PolymarketApi>,
         eth_market: crate::models::Market,
@@ -55,13 +71,25 @@ impl MarketMonitor {
         xrp_market: crate::models::Market,
         check_interval_ms: u64,
         simulation_mode: bool,
+        period_seconds: Option<u64>,
+        enable_eth_trading: Option<bool>,
+        enable_solana_trading: Option<bool>,
+        enable_xrp_trading: Option<bool>,
+        chainlink_btc: Option<Arc<tokio::sync::Mutex<Option<f64>>>>,
+        trailing_status_line: Option<Arc<tokio::sync::Mutex<String>>>,
     ) -> Result<Self> {
-        // Calculate current 15-minute period timestamp
+        let period_secs = period_seconds.unwrap_or(900);
+        // Calculate current period timestamp (e.g. 15m = 900, 5m = 300)
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let current_period = (current_time / 900) * 900; // Round to nearest 15 minutes
+        let current_period = (current_time / period_secs) * period_secs;
+
+        let log_enable_eth = enable_eth_trading.unwrap_or(true);
+        let log_enable_solana = enable_solana_trading.unwrap_or(true);
+        let log_enable_xrp = enable_xrp_trading.unwrap_or(true);
+        let price_to_beat_cache = chainlink_btc.as_ref().map(|_| Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())));
         
         // Create price monitor file if in simulation mode
         let price_monitor_file = if simulation_mode {
@@ -104,10 +132,17 @@ impl MarketMonitor {
             simulation_mode,
             price_monitor_file,
             market_price_files: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            period_seconds: period_secs,
+            log_enable_eth,
+            log_enable_solana,
+            log_enable_xrp,
+            chainlink_btc,
+            price_to_beat_cache,
+            trailing_status_line,
         })
     }
 
-    /// Update markets when a new 15-minute period starts
+    /// Update markets when a new period starts
     pub async fn update_markets(&self, eth_market: crate::models::Market, btc_market: crate::models::Market, solana_market: crate::models::Market, xrp_market: crate::models::Market) -> Result<()> {
         eprintln!("🔄 Updating to new 15-minute period markets...");
         eprintln!("✅ ETH Market: {} ({}) - Active trading", eth_market.slug, eth_market.condition_id);
@@ -115,16 +150,14 @@ impl MarketMonitor {
         eprintln!("✅ Solana Market: {} ({}) - Active trading", solana_market.slug, solana_market.condition_id);
         eprintln!("✅ XRP Market: {} ({}) - Active trading", xrp_market.slug, xrp_market.condition_id);
         
-        // Log new market start to history (trading event)
+        // Log new market start to history.toml (trading event)
         let period = eth_market.slug.split('-').last().unwrap_or("unknown");
-        crate::log_trading_event(&format!(
-            "NEW_MARKET | period={} | eth={} btc={} sol={} xrp={}",
+        crate::log_trading_event(&format!("🆕 NEW MARKET STARTED | Period: {} | ETH: {} | BTC: {} | SOL: {} | XRP: {}", 
             period,
-            &eth_market.condition_id[..16.min(eth_market.condition_id.len())],
-            &btc_market.condition_id[..16.min(btc_market.condition_id.len())],
-            &solana_market.condition_id[..16.min(solana_market.condition_id.len())],
-            &xrp_market.condition_id[..16.min(xrp_market.condition_id.len())]
-        ));
+            eth_market.condition_id,
+            btc_market.condition_id,
+            solana_market.condition_id,
+            xrp_market.condition_id));
         
         *self.eth_market.lock().await = eth_market;
         *self.btc_market.lock().await = btc_market;
@@ -147,7 +180,7 @@ impl MarketMonitor {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let new_period = (current_time / 900) * 900;
+        let new_period = (current_time / self.period_seconds) * self.period_seconds;
         *self.current_period_timestamp.lock().await = new_period;
         
         Ok(())
@@ -179,11 +212,11 @@ impl MarketMonitor {
 
     /// Refresh market data once per period (15 minutes) to get token IDs
     async fn refresh_market_tokens(&self) -> Result<()> {
-        // Check if we need to refresh (every 15 minutes = 900 seconds)
+        // Check if we need to refresh (once per period)
         let should_refresh = {
             let last_refresh = self.last_market_refresh.lock().await;
             last_refresh
-                .map(|last| last.elapsed().as_secs() >= 900)
+                .map(|last| last.elapsed().as_secs() >= self.period_seconds)
                 .unwrap_or(true)
         };
 
@@ -334,8 +367,8 @@ impl MarketMonitor {
             .as_secs();
 
         // Calculate remaining time - use actual market end time from API if available
-        // Otherwise fall back to slug timestamp + 900 seconds
-        const PERIOD_DURATION: u64 = 900; // 15 minutes in seconds (fallback)
+        // Otherwise fall back to slug timestamp + period_seconds
+        let period_duration = self.period_seconds;
         
         // Try to use actual market end time from API
         let btc_market_end = {
@@ -360,24 +393,24 @@ impl MarketMonitor {
         let btc_period_end = if let Some(api_end_time) = btc_market_end {
             api_end_time // Use actual end time from API
         } else {
-            btc_market_timestamp + PERIOD_DURATION // Fallback to slug + 900s
+            btc_market_timestamp + period_duration
         };
         
         let eth_period_end = if let Some(api_end_time) = eth_market_end {
             api_end_time // Use actual end time from API
         } else {
-            eth_market_timestamp + PERIOD_DURATION // Fallback to slug + 900s
+            eth_market_timestamp + period_duration
         };
         
         let solana_period_end = if let Some(api_end_time) = solana_market_end {
             api_end_time // Use actual end time from API
         } else {
-            solana_market_timestamp + PERIOD_DURATION // Fallback to slug + 900s
+            solana_market_timestamp + period_duration
         };
         let xrp_period_end = if let Some(api_end_time) = xrp_market_end {
             api_end_time // Use actual end time from API
         } else {
-            xrp_market_timestamp + PERIOD_DURATION // Fallback to slug + 900s
+            xrp_market_timestamp + period_duration
         };
         
         let eth_remaining_secs = if eth_period_end > current_timestamp {
@@ -556,20 +589,56 @@ impl MarketMonitor {
         );
 
         // Log prices to terminal (real-time monitoring) - NOT saved to history.toml
-        // Compact one-line format for easy monitoring: BTC/ETH/SOL/XRP Up/Down, single timer
+        // Only include markets that have trading enabled (efficient logging)
         let time_remaining_str = format_remaining_time(time_remaining_seconds);
-        let price_log_line = format!("📊 BTC: U{} D{} | ETH: U{} D{} | SOL: U{} D{} | XRP: U{} D{} | ⏱️  {}", 
-            btc_up_str, btc_down_str,
-            eth_up_str, eth_down_str,
-            solana_up_str, solana_down_str,
-            xrp_up_str, xrp_down_str,
-            time_remaining_str);
-        eprintln!("{}", price_log_line);
-        
-        // Always log prices to files (both simulation and production/price monitor mode)
+        let mut parts: Vec<String> = vec![
+            format!("📊 BTC: U{} D{}", btc_up_str, btc_down_str),
+        ];
+        if self.log_enable_eth {
+            parts.push(format!("ETH: U{} D{}", eth_up_str, eth_down_str));
+        }
+        if self.log_enable_solana {
+            parts.push(format!("SOL: U{} D{}", solana_up_str, solana_down_str));
+        }
+        if self.log_enable_xrp {
+            parts.push(format!("XRP: U{} D{}", xrp_up_str, xrp_down_str));
+        }
+        parts.push(format!("⏱️  {}", time_remaining_str));
+
+        // Chainlink BTC and price-to-beat (from RTDS). Price-to-beat = Chainlink BTC at the 0-second-remaining moment of the *previous* market (transition).
+        if let (Some(chainlink_arc), Some(cache_arc)) = (&self.chainlink_btc, &self.price_to_beat_cache) {
+            let chainlink = chainlink_arc.lock().await;
+            if let Some(&btc_now) = chainlink.as_ref() {
+                drop(chainlink);
+                let period = btc_market_timestamp;
+                let mut cache = cache_arc.lock().await;
+                // When current market hits 0s remaining, record this BTC price as price-to-beat for the *next* period.
+                if time_remaining_seconds == 0 {
+                    cache.insert(period + self.period_seconds, btc_now);
+                }
+                let beat = cache.get(&period).copied();
+                if let Some(beat) = beat {
+                    let diff = btc_now - beat;
+                    parts.push(format!("| BTC ${:.0} beat ${:.0} Δ{:+.0}", btc_now, beat, diff));
+                } else {
+                    parts.push(format!("| BTC ${:.0} beat -", btc_now));
+                }
+            }
+        }
+
+        if let Some(ref status_arc) = self.trailing_status_line {
+            let s = status_arc.lock().await;
+            if !s.is_empty() {
+                parts.push(s.clone());
+            }
+        }
+
+        let price_log_line = parts.join(" | ");
         let timestamp = Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
         let log_entry = format!("[{}] {}\n", timestamp, price_log_line);
-        
+        crate::log_to_history(&log_entry);
+
+        // Always log prices to files (both simulation and production/price monitor mode)
         // Write to main price monitor file (if in simulation mode)
         if self.simulation_mode {
             if let Some(file_mutex) = &self.price_monitor_file {

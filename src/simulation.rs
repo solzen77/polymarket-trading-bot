@@ -3,7 +3,7 @@ use crate::detector::TokenType;
 use rust_decimal::Decimal;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs::OpenOptions;
 use std::io::Write;
 use chrono::Utc;
@@ -47,6 +47,8 @@ pub struct SimulationTracker {
     market_files: Arc<Mutex<HashMap<String, Arc<Mutex<std::fs::File>>>>>, // Per-market files: condition_id -> file
     total_realized_pnl: Arc<Mutex<f64>>,
     total_invested: Arc<Mutex<f64>>,
+    // Price trend tracking: Key: (period_timestamp, token_id)
+    price_trackers: Arc<Mutex<HashMap<(u64, String), PriceTrendTracker>>>,
 }
 
 impl SimulationTracker {
@@ -67,6 +69,7 @@ impl SimulationTracker {
             market_files: Arc::new(Mutex::new(HashMap::new())),
             total_realized_pnl: Arc::new(Mutex::new(0.0)),
             total_invested: Arc::new(Mutex::new(0.0)),
+            price_trackers: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -193,6 +196,200 @@ impl SimulationTracker {
         }
     }
 
+    /// Cancel a simulated limit order (removes it from pending tracking)
+    pub async fn cancel_limit_order(&self, token_id: &str, side: &str) {
+        let order_key = format!("{}_{}", token_id, side);
+        let mut orders = self.pending_limit_orders.lock().await;
+        let existed = orders.remove(&order_key).is_some();
+        let remaining = orders.values().filter(|o| !o.filled).count();
+        drop(orders);
+
+        if existed {
+            self.log_to_file(&format!(
+                "🛑 SIMULATION: Limit order cancelled - Token: {} Side: {} | Remaining unfilled: {}",
+                token_id, side, remaining
+            )).await;
+        }
+    }
+
+    /// Record a market buy as filled immediately in simulation (no limit order; position created at fill_price).
+    pub async fn add_market_buy_position(
+        &self,
+        token_id: String,
+        token_type: TokenType,
+        condition_id: String,
+        fill_price: f64,
+        units: f64,
+        period_timestamp: u64,
+    ) {
+        let investment_amount = units * fill_price;
+        let position = SimulatedPosition {
+            token_id: token_id.clone(),
+            token_type: token_type.clone(),
+            condition_id,
+            purchase_price: fill_price,
+            units,
+            investment_amount,
+            sell_price: None,
+            purchase_timestamp: std::time::Instant::now(),
+            period_timestamp,
+            sold: false,
+            sell_price_actual: None,
+            sell_timestamp: None,
+        };
+        {
+            let mut positions = self.positions.lock().await;
+            positions.insert(token_id.clone(), position);
+        }
+        {
+            let mut total_invested = self.total_invested.lock().await;
+            *total_invested += investment_amount;
+        }
+        let token_type_str = match &token_type {
+            TokenType::BtcUp | TokenType::EthUp | TokenType::SolanaUp | TokenType::XrpUp => "Up",
+            TokenType::BtcDown | TokenType::EthDown | TokenType::SolanaDown | TokenType::XrpDown => "Down",
+        };
+        self.log_to_file(&format!(
+            "✅ SIMULATION: Market BUY filled - {} ({}), Price: ${:.6}, Units: {:.6}, Investment: ${:.2}",
+            &token_id[..16.min(token_id.len())],
+            token_type_str,
+            fill_price,
+            units,
+            investment_amount
+        )).await;
+    }
+
+    /// Track price for trend analysis
+    /// Call this whenever you receive new price data
+    pub async fn track_price(
+        &self,
+        period_timestamp: u64,
+        token_id: &str,
+        time_elapsed_seconds: u64,
+        bid_price: f64,
+        max_history_size: usize,
+    ) {
+        let tracker_key = (period_timestamp, token_id.to_string());
+        let mut trackers = self.price_trackers.lock().await;
+        let tracker = trackers.entry(tracker_key)
+            .or_insert_with(|| PriceTrendTracker::new(max_history_size));
+        tracker.add_price(time_elapsed_seconds, bid_price);
+    }
+
+    /// Get trend analysis for a token
+    pub async fn get_trend_analysis(
+        &self,
+        period_timestamp: u64,
+        token_id: &str,
+        min_samples: usize,
+    ) -> Option<TrendAnalysis> {
+        let tracker_key = (period_timestamp, token_id.to_string());
+        let trackers = self.price_trackers.lock().await;
+        trackers.get(&tracker_key)
+            .map(|tracker| tracker.calculate_trend(min_samples))
+    }
+
+    /// Check if a token is uptrending
+    pub async fn is_token_uptrending(
+        &self,
+        period_timestamp: u64,
+        token_id: &str,
+        min_strength: f64,
+        min_samples: usize,
+    ) -> bool {
+        let tracker_key = (period_timestamp, token_id.to_string());
+        let trackers = self.price_trackers.lock().await;
+        if let Some(tracker) = trackers.get(&tracker_key) {
+            tracker.is_uptrending(min_strength, min_samples)
+        } else {
+            false
+        }
+    }
+
+    /// Get trend information for hedge decision making
+    pub async fn get_trend_for_hedge(
+        &self,
+        period_timestamp: u64,
+        token_id: &str,
+        min_samples: usize,
+    ) -> Option<(bool, f64, f64)> {
+        // Returns (is_uptrending, trend_strength, slope)
+        let tracker_key = (period_timestamp, token_id.to_string());
+        let trackers = self.price_trackers.lock().await;
+        trackers.get(&tracker_key)
+            .map(|tracker| tracker.get_trend_for_hedge(min_samples))
+    }
+
+    /// Log trend analysis for a token (useful for debugging)
+    pub async fn log_trend_analysis(
+        &self,
+        period_timestamp: u64,
+        token_id: &str,
+        token_type: &TokenType,
+        min_samples: usize,
+    ) {
+        // Get market name from token type
+        let market_name = match token_type {
+            TokenType::BtcUp | TokenType::BtcDown => "BTC",
+            TokenType::EthUp | TokenType::EthDown => "ETH",
+            TokenType::SolanaUp | TokenType::SolanaDown => "SOL",
+            TokenType::XrpUp | TokenType::XrpDown => "XRP",
+        };
+        
+        let direction_label = match token_type {
+            TokenType::BtcUp | TokenType::EthUp | TokenType::SolanaUp | TokenType::XrpUp => "Up",
+            TokenType::BtcDown | TokenType::EthDown | TokenType::SolanaDown | TokenType::XrpDown => "Down",
+        };
+        
+        let full_name = format!("{} {}", market_name, direction_label);
+        
+        if let Some(trend) = self.get_trend_analysis(period_timestamp, token_id, min_samples).await {
+            let direction_str = match trend.direction {
+                TrendDirection::Uptrend => "📈 UPTREND",
+                TrendDirection::Downtrend => "📉 DOWNTREND",
+                TrendDirection::Sideways => "➡️  SIDEWAYS",
+                TrendDirection::Unknown => "❓ UNKNOWN",
+            };
+            
+            // Get sample count for context
+            let tracker_key = (period_timestamp, token_id.to_string());
+            let trackers = self.price_trackers.lock().await;
+            let sample_count = trackers.get(&tracker_key)
+                .map(|t| t.sample_count())
+                .unwrap_or(0);
+            drop(trackers);
+            
+            let message = format!(
+                "📊 TREND: {} | {} | Strength: {:.3} | Price Δ: ${:.4} | Slope: {:.6}/s | Duration: {}s | Samples: {}",
+                full_name,
+                direction_str,
+                trend.strength,
+                trend.price_change,
+                trend.slope,
+                trend.trend_duration,
+                sample_count
+            );
+            self.log_to_file(&message).await;
+            // Also print to console
+            eprintln!("{}", message);
+        } else {
+            let message = format!(
+                "📊 TREND: {} | ❓ INSUFFICIENT DATA (need {} samples)",
+                full_name,
+                min_samples
+            );
+            self.log_to_file(&message).await;
+            // Also print to console
+            eprintln!("{}", message);
+        }
+    }
+
+    /// Clear price trackers for a specific period (when period ends)
+    pub async fn clear_period_trackers(&self, period_timestamp: u64) {
+        let mut trackers = self.price_trackers.lock().await;
+        trackers.retain(|(period, _), _| *period != period_timestamp);
+    }
+
     /// Check if any limit orders should be filled based on current prices
     pub async fn check_limit_orders(&self, current_prices: &HashMap<String, TokenPrice>) {
         let mut orders_to_fill = Vec::new();
@@ -230,7 +427,7 @@ impl SimulationTracker {
                                 // Always log price check for BUY orders
                                 let bid_str = price_data.bid.map(|b| format!("${:.6}", b.to_string().parse::<f64>().unwrap_or(0.0))).unwrap_or_else(|| "N/A".to_string());
                                 let diff_pct = if order.target_price > 0.0 {
-                                    (order.target_price - ask_f64) / order.target_price * 100.0
+                                    ((order.target_price - ask_f64) / order.target_price * 100.0)
                                 } else {
                                     0.0
                                 };
@@ -800,3 +997,159 @@ impl SimulationTracker {
 }
 
 use anyhow::{Result, Context};
+
+// ============================================================================
+// Price Trending Analysis
+// ============================================================================
+
+/// Tracks price history for trend analysis
+#[derive(Debug, Clone)]
+pub struct PriceTrendTracker {
+    /// Store (time_elapsed_seconds, bid_price) pairs
+    price_history: VecDeque<(u64, f64)>,
+    max_history_size: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TrendDirection {
+    Uptrend,    // Consistently increasing
+    Downtrend,  // Consistently decreasing
+    Sideways,   // Moving within a range
+    Unknown,    // Not enough data
+}
+
+#[derive(Debug, Clone)]
+pub struct TrendAnalysis {
+    pub direction: TrendDirection,
+    pub strength: f64,        // 0.0 to 1.0 (how strong the trend is)
+    pub price_change: f64,    // Total price change over the period
+    pub trend_duration: u64,  // How long the trend has been active (seconds)
+    pub slope: f64,          // Linear regression slope (price change per second)
+}
+
+impl PriceTrendTracker {
+    pub fn new(max_history_size: usize) -> Self {
+        Self {
+            price_history: VecDeque::with_capacity(max_history_size),
+            max_history_size,
+        }
+    }
+
+    /// Add a new price snapshot
+    pub fn add_price(&mut self, time_elapsed_seconds: u64, price: f64) {
+        // Remove old entries if we exceed max size
+        while self.price_history.len() >= self.max_history_size {
+            self.price_history.pop_front();
+        }
+        self.price_history.push_back((time_elapsed_seconds, price));
+    }
+
+    /// Calculate the current trend using linear regression and pattern analysis
+    pub fn calculate_trend(&self, min_samples: usize) -> TrendAnalysis {
+        if self.price_history.len() < min_samples {
+            return TrendAnalysis {
+                direction: TrendDirection::Unknown,
+                strength: 0.0,
+                price_change: 0.0,
+                trend_duration: 0,
+                slope: 0.0,
+            };
+        }
+
+        let prices: Vec<f64> = self.price_history.iter().map(|(_, p)| *p).collect();
+        let timestamps: Vec<u64> = self.price_history.iter().map(|(t, _)| *t).collect();
+        
+        // Calculate linear regression slope (trend direction)
+        let n = prices.len() as f64;
+        let sum_x: f64 = timestamps.iter().sum::<u64>() as f64;
+        let sum_y: f64 = prices.iter().sum();
+        let sum_xy: f64 = timestamps.iter().zip(prices.iter()).map(|(x, y)| *x as f64 * y).sum();
+        let sum_x2: f64 = timestamps.iter().map(|x| (*x as f64).powi(2)).sum();
+        
+        let denominator = n * sum_x2 - sum_x.powi(2);
+        let slope = if denominator.abs() > 1e-10 {
+            (n * sum_xy - sum_x * sum_y) / denominator
+        } else {
+            0.0
+        };
+        
+        // Calculate price change and consistency
+        let first_price = prices[0];
+        let last_price = prices[prices.len() - 1];
+        let price_change = last_price - first_price;
+        
+        // Calculate consistency (how much prices deviate from the trend line)
+        let mut deviations = Vec::new();
+        for (i, price) in prices.iter().enumerate() {
+            let expected_price = first_price + (slope * (timestamps[i] - timestamps[0]) as f64);
+            deviations.push((price - expected_price).abs());
+        }
+        let avg_deviation = deviations.iter().sum::<f64>() / deviations.len() as f64;
+        
+        // Normalize deviation to get consistency (lower deviation = higher consistency)
+        // Use a scaling factor: if avg_deviation is small relative to price range, trend is strong
+        let price_range = prices.iter().max_by(|a, b| a.partial_cmp(b).unwrap()).unwrap() - 
+                         prices.iter().min_by(|a, b| a.partial_cmp(b).unwrap()).unwrap();
+        let consistency = if price_range > 1e-10 {
+            (1.0 - (avg_deviation / price_range).min(1.0)).max(0.0)
+        } else {
+            1.0 // If no price range, consider it consistent
+        };
+        
+        // Determine trend direction
+        // Use a threshold for slope to avoid noise (0.0001 per second = 0.006 per minute)
+        let slope_threshold = 0.0001;
+        let price_change_threshold = 0.01; // At least 1 cent change
+        
+        let direction = if slope > slope_threshold && price_change > price_change_threshold {
+            TrendDirection::Uptrend
+        } else if slope < -slope_threshold && price_change < -price_change_threshold {
+            TrendDirection::Downtrend
+        } else {
+            TrendDirection::Sideways
+        };
+        
+        // Calculate trend strength (0.0 to 1.0)
+        // Combine slope magnitude and consistency
+        let slope_magnitude = slope.abs() * 1000.0; // Scale slope to reasonable range
+        let strength = (slope_magnitude.min(1.0) * consistency).min(1.0);
+        
+        let trend_duration = if timestamps.len() > 1 {
+            timestamps[timestamps.len() - 1] - timestamps[0]
+        } else {
+            0
+        };
+        
+        TrendAnalysis {
+            direction,
+            strength,
+            price_change,
+            trend_duration,
+            slope,
+        }
+    }
+
+    /// Check if price is trending up strongly
+    pub fn is_uptrending(&self, min_strength: f64, min_samples: usize) -> bool {
+        let trend = self.calculate_trend(min_samples);
+        trend.direction == TrendDirection::Uptrend && trend.strength >= min_strength
+    }
+
+    /// Get the current price trend for decision making
+    pub fn get_trend_for_hedge(&self, min_samples: usize) -> (bool, f64, f64) {
+        // Returns (is_uptrending, trend_strength, slope)
+        let trend = self.calculate_trend(min_samples);
+        let is_uptrend = trend.direction == TrendDirection::Uptrend;
+        (is_uptrend, trend.strength, trend.slope)
+    }
+
+    /// Get the number of price samples currently tracked
+    pub fn sample_count(&self) -> usize {
+        self.price_history.len()
+    }
+
+    /// Clear all price history (useful when starting a new period)
+    pub fn clear(&mut self) {
+        self.price_history.clear();
+    }
+}

@@ -1,13 +1,14 @@
 pub mod api;
-pub mod clob_sdk_ffi;
-pub mod config;
+pub mod clob_sdk;
+pub mod backtest;
 pub mod detector;
+pub mod config;
 pub mod merge;
 pub mod models;
 pub mod monitor;
+pub mod rtds;
 pub mod simulation;
 pub mod trader;
-pub mod logger;
 
 // Re-export commonly used types
 pub use api::PolymarketApi;
@@ -18,7 +19,6 @@ pub use models::TokenPrice;
 use std::sync::{Mutex, OnceLock};
 use std::fs::File;
 use std::io::Write;
-use chrono::Local;
 
 static HISTORY_FILE: OnceLock<Mutex<File>> = OnceLock::new();
 
@@ -43,16 +43,20 @@ pub fn log_to_history(message: &str) {
     }
 }
 
-/// Write a trading event to history with [HH:MM:SS] [EVENT] prefix (same style as logger).
 pub fn log_trading_event(event: &str) {
-    let ts = Local::now().format("%H:%M:%S");
-    log_to_history(&format!("[{}] [EVENT]  {}\n", ts, event));
+    // Write structured trading event with timestamp
+    use chrono::Utc;
+    let timestamp = Utc::now().format("%Y-%m-%dT%H:%M:%SZ");
+    log_to_history(&format!("[{}] {}\n", timestamp, event));
 }
 
-/// Legacy log line; uses same [TIME] [INFO] style as log_info!
+// Macro for logging - modules use crate::log_println!
 #[macro_export]
 macro_rules! log_println {
     ($($arg:tt)*) => {
-        $crate::log_info!($($arg)*)
+        {
+            let message = format!($($arg)*);
+            $crate::log_to_history(&format!("{}\n", message));
+        }
     };
 }

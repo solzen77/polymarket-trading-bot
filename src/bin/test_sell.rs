@@ -1,8 +1,8 @@
 use anyhow::Result;
 use clap::Parser;
 use rust_decimal::Decimal;
-use polymarket_arbitrage_bot::{PolymarketApi, Config};
-use polymarket_arbitrage_bot::models::TokenPrice;
+use polymarket_trading_bot::{PolymarketApi, Config};
+use polymarket_trading_bot::models::TokenPrice;
 
 #[derive(Parser, Debug)]
 #[command(name = "test_sell")]

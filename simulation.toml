@@ -1,99 +1,56 @@
-[2026-02-19T16:24:08Z] 🔄 SIMULATION: check_pending_trades called
-[2026-02-19T16:24:08Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+[2026-02-27T01:49:19Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T01:49:19Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
 
-[2026-02-19T16:24:08Z] ⚠️  SIMULATION: No token IDs to fetch prices for
-[2026-02-19T17:00:42Z] 🔄 SIMULATION: check_pending_trades called
-[2026-02-19T17:00:42Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+[2026-02-27T01:49:19Z] ⚠️  SIMULATION: No token IDs to fetch prices for
+[2026-02-27T01:49:20Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T01:49:20Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
 
-[2026-02-19T17:00:42Z] ⚠️  SIMULATION: No token IDs to fetch prices for
-[2026-02-19T17:06:23Z] 🔄 SIMULATION: check_pending_trades called
-[2026-02-19T17:06:23Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+[2026-02-27T01:49:20Z] ⚠️  SIMULATION: No token IDs to fetch prices for
+[2026-02-27T01:49:21Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T01:49:21Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
 
-[2026-02-19T17:06:23Z] ⚠️  SIMULATION: No token IDs to fetch prices for
-[2026-02-19T17:21:42Z] 🔄 SIMULATION: check_pending_trades called
-[2026-02-19T17:21:42Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+[2026-02-27T01:49:21Z] ⚠️  SIMULATION: No token IDs to fetch prices for
+[2026-02-27T01:49:22Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T01:49:22Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
 
-[2026-02-19T17:21:42Z] ⚠️  SIMULATION: No token IDs to fetch prices for
-[2026-02-19T17:29:55Z] 🔄 SIMULATION: check_pending_trades called
-[2026-02-19T17:29:55Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+[2026-02-27T01:49:22Z] ⚠️  SIMULATION: No token IDs to fetch prices for
+[2026-02-27T01:49:23Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T01:49:23Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
 
-[2026-02-19T17:29:55Z] ⚠️  SIMULATION: No token IDs to fetch prices for
-[2026-02-19T19:20:34Z] 🔄 SIMULATION: check_pending_trades called
-[2026-02-19T19:20:34Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+[2026-02-27T01:49:23Z] ⚠️  SIMULATION: No token IDs to fetch prices for
+[2026-02-27T01:49:24Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T01:49:24Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
 
-[2026-02-19T19:20:34Z] ⚠️  SIMULATION: No token IDs to fetch prices for
-[2026-02-20T20:16:23Z] 🔄 SIMULATION: check_pending_trades called
-[2026-02-20T20:16:23Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+[2026-02-27T01:49:24Z] ⚠️  SIMULATION: No token IDs to fetch prices for
+[2026-02-27T01:49:25Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T01:49:25Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
 
-[2026-02-20T20:16:23Z] ⚠️  SIMULATION: No token IDs to fetch prices for
-[2026-02-24T10:39:52Z] 🔄 SIMULATION: check_pending_trades called
-[2026-02-24T10:39:52Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+[2026-02-27T01:49:25Z] ⚠️  SIMULATION: No token IDs to fetch prices for
+[2026-02-27T01:49:26Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T01:49:26Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
 
-[2026-02-24T10:39:52Z] ⚠️  SIMULATION: No token IDs to fetch prices for
-[2026-02-24T10:45:00Z] 🆕 NEW MARKET STARTED | Period: 1771929900 | ETH: 0x5eb0aec4e411b5 | BTC: 0x50744def44a808 | SOL: 0x6ab07edeb7c842 | XRP: 0x618781e95c76fe
-[2026-02-24T10:45:03Z] 📋 SIMULATION: Limit BUY order added - Token: 22998445888363725089839495581003526347920484848695879624666197591811875352083 (Up), Price: $0.450000, Size: 5.000000 | Total orders: 1, Unfilled: 1
-[2026-02-24T10:45:03Z] ✅ SIMULATION: Order verified stored - Key: 22998445888363725089839495581003
-[2026-02-24T10:45:03Z] 📋 SIMULATION: Limit BUY order added - Token: 10073603949922204270466703493443011562578507403537490786023358312875419270021 (Down), Price: $0.450000, Size: 5.000000 | Total orders: 2, Unfilled: 2
-[2026-02-24T10:45:03Z] ✅ SIMULATION: Order verified stored - Key: 10073603949922204270466703493443
-[2026-02-24T10:45:03Z] 📋 SIMULATION: Limit BUY order added - Token: 84875503301800250276334643287747133716427383833360143328075752750642133135562 (Up), Price: $0.450000, Size: 5.000000 | Total orders: 3, Unfilled: 3
-[2026-02-24T10:45:03Z] ✅ SIMULATION: Order verified stored - Key: 84875503301800250276334643287747
-[2026-02-24T10:45:03Z] 📋 SIMULATION: Limit BUY order added - Token: 4020064680679449191835588834890703829162701125250437860962795554945190874092 (Down), Price: $0.450000, Size: 5.000000 | Total orders: 4, Unfilled: 4
-[2026-02-24T10:45:03Z] ✅ SIMULATION: Order verified stored - Key: 40200646806794491918355888348907
-[2026-02-24T10:45:03Z] 📋 SIMULATION: Limit BUY order added - Token: 96204883474711055454097840539916919452077474914771484875517586017321182817670 (Up), Price: $0.450000, Size: 5.000000 | Total orders: 5, Unfilled: 5
-[2026-02-24T10:45:03Z] ✅ SIMULATION: Order verified stored - Key: 96204883474711055454097840539916
-[2026-02-24T10:45:03Z] 📋 SIMULATION: Limit BUY order added - Token: 74506523698629041419402746509345176402177749617921572570387681291690088488329 (Down), Price: $0.450000, Size: 5.000000 | Total orders: 6, Unfilled: 6
-[2026-02-24T10:45:03Z] ✅ SIMULATION: Order verified stored - Key: 74506523698629041419402746509345
-[2026-02-24T10:45:03Z] 📋 SIMULATION: Limit BUY order added - Token: 60404260683751322703725172673238352318926877260089354703236293367268422205372 (Up), Price: $0.450000, Size: 5.000000 | Total orders: 7, Unfilled: 7
-[2026-02-24T10:45:03Z] ✅ SIMULATION: Order verified stored - Key: 60404260683751322703725172673238
-[2026-02-24T10:45:03Z] 📋 SIMULATION: Limit BUY order added - Token: 20768256678671151026255743193051962522346458021982863176043478105766734068211 (Down), Price: $0.450000, Size: 5.000000 | Total orders: 8, Unfilled: 8
-[2026-02-24T10:45:03Z] ✅ SIMULATION: Order verified stored - Key: 20768256678671151026255743193051
-[2026-02-25T00:23:18Z] 🔄 SIMULATION: check_pending_trades called
-[2026-02-25T00:23:18Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+[2026-02-27T01:49:26Z] ⚠️  SIMULATION: No token IDs to fetch prices for
+[2026-02-27T01:49:27Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T01:49:27Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
 
-[2026-02-25T00:23:18Z] ⚠️  SIMULATION: No token IDs to fetch prices for
-[2026-02-25T00:42:20Z] 🔄 SIMULATION: check_pending_trades called
-[2026-02-25T00:42:20Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+[2026-02-27T01:49:27Z] ⚠️  SIMULATION: No token IDs to fetch prices for
+[2026-02-27T01:49:28Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T01:49:28Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
 
-[2026-02-25T00:42:20Z] ⚠️  SIMULATION: No token IDs to fetch prices for
-[2026-02-25T01:00:18Z] 🔄 SIMULATION: check_pending_trades called
-[2026-02-25T01:00:18Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+[2026-02-27T01:49:28Z] ⚠️  SIMULATION: No token IDs to fetch prices for
+[2026-02-27T01:49:29Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T01:49:29Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
 
-[2026-02-25T01:00:18Z] ⚠️  SIMULATION: No token IDs to fetch prices for
-[2026-02-25T01:09:18Z] 🔄 SIMULATION: check_pending_trades called
-[2026-02-25T01:09:18Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+[2026-02-27T01:49:29Z] ⚠️  SIMULATION: No token IDs to fetch prices for
+[2026-02-27T02:10:34Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T02:10:34Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
 
-[2026-02-25T01:09:18Z] ⚠️  SIMULATION: No token IDs to fetch prices for
-[2026-02-25T01:15:01Z] 🆕 NEW MARKET STARTED | Period: 1771982100 | ETH: 0xea9e43cc5e220d | BTC: 0xd3381064a32b88 | SOL: 0xdb594f214fc23e | XRP: 0x087ddc7dfd560f
-[2026-02-25T01:15:04Z] 📋 SIMULATION: Limit BUY order added - Token: 60301133039090630050989734948824361220493992360719599023095826438234770747008 (Up), Price: $0.450000, Size: 5.000000 | Total orders: 1, Unfilled: 1
-[2026-02-25T01:15:04Z] ✅ SIMULATION: Order verified stored - Key: 60301133039090630050989734948824
-[2026-02-25T01:15:04Z] 📋 SIMULATION: Limit BUY order added - Token: 68795309975157807718759395307755278230741891519905337875809970613481512535067 (Down), Price: $0.450000, Size: 5.000000 | Total orders: 2, Unfilled: 2
-[2026-02-25T01:15:04Z] ✅ SIMULATION: Order verified stored - Key: 68795309975157807718759395307755
-[2026-02-25T01:15:04Z] 📋 SIMULATION: Limit BUY order added - Token: 92965604632805536259204198983297653262936817478745846016648100328377612962437 (Up), Price: $0.450000, Size: 5.000000 | Total orders: 3, Unfilled: 3
-[2026-02-25T01:15:04Z] ✅ SIMULATION: Order verified stored - Key: 92965604632805536259204198983297
-[2026-02-25T01:15:04Z] 📋 SIMULATION: Limit BUY order added - Token: 77967923455253080381864924739791336223148440853920825477994286037478761052578 (Down), Price: $0.450000, Size: 5.000000 | Total orders: 4, Unfilled: 4
-[2026-02-25T01:15:04Z] ✅ SIMULATION: Order verified stored - Key: 77967923455253080381864924739791
-[2026-02-25T01:15:04Z] 📋 SIMULATION: Limit BUY order added - Token: 93418411966599406391505720490106154577673585043568055871060652790946957376656 (Up), Price: $0.450000, Size: 5.000000 | Total orders: 5, Unfilled: 5
-[2026-02-25T01:15:04Z] ✅ SIMULATION: Order verified stored - Key: 93418411966599406391505720490106
-[2026-02-25T01:15:04Z] 📋 SIMULATION: Limit BUY order added - Token: 15022254773213449145917146952460887579491124873776650697275629462095751655922 (Down), Price: $0.450000, Size: 5.000000 | Total orders: 6, Unfilled: 6
-[2026-02-25T01:15:04Z] ✅ SIMULATION: Order verified stored - Key: 15022254773213449145917146952460
-[2026-02-25T01:15:04Z] 📋 SIMULATION: Limit BUY order added - Token: 101483231216900474246141719959955240857997109754441282010034508746890023062531 (Up), Price: $0.450000, Size: 5.000000 | Total orders: 7, Unfilled: 7
-[2026-02-25T01:15:04Z] ✅ SIMULATION: Order verified stored - Key: 10148323121690047424614171995995
-[2026-02-25T01:15:04Z] 📋 SIMULATION: Limit BUY order added - Token: 28818397640341434323802748303402978992567468503177940806322187701985063469980 (Down), Price: $0.450000, Size: 5.000000 | Total orders: 8, Unfilled: 8
-[2026-02-25T01:15:04Z] ✅ SIMULATION: Order verified stored - Key: 28818397640341434323802748303402
-[2026-02-25T01:30:00Z] 🆕 NEW MARKET STARTED | Period: 1771983000 | ETH: 0x7146e31408c62d | BTC: 0x9a4717e4d996e0 | SOL: 0x87b163b2b524f6 | XRP: 0x8c430335c2434b
-[2026-02-25T01:30:03Z] 📋 SIMULATION: Limit BUY order added - Token: 61909316456687555344930433137362008856977049842494080953504691027830513392958 (Up), Price: $0.450000, Size: 5.000000 | Total orders: 9, Unfilled: 9
-[2026-02-25T01:30:03Z] ✅ SIMULATION: Order verified stored - Key: 61909316456687555344930433137362
-[2026-02-25T01:30:03Z] 📋 SIMULATION: Limit BUY order added - Token: 24664844915324543699657590453149659112055942281226040723426099605023179199858 (Down), Price: $0.450000, Size: 5.000000 | Total orders: 10, Unfilled: 10
-[2026-02-25T01:30:03Z] ✅ SIMULATION: Order verified stored - Key: 24664844915324543699657590453149
-[2026-02-25T01:30:03Z] 📋 SIMULATION: Limit BUY order added - Token: 12474388980041437124928232876159361300140713529468780098577460756764609191165 (Up), Price: $0.450000, Size: 5.000000 | Total orders: 11, Unfilled: 11
-[2026-02-25T01:30:03Z] ✅ SIMULATION: Order verified stored - Key: 12474388980041437124928232876159
-[2026-02-25T01:30:03Z] 📋 SIMULATION: Limit BUY order added - Token: 52591865690796472272000120192469085563404702336577731250408285938766651660721 (Down), Price: $0.450000, Size: 5.000000 | Total orders: 12, Unfilled: 12
-[2026-02-25T01:30:03Z] ✅ SIMULATION: Order verified stored - Key: 52591865690796472272000120192469
-[2026-02-25T01:30:03Z] 📋 SIMULATION: Limit BUY order added - Token: 94083258428610481154187783709922337855358494448469366783288719697658666265240 (Up), Price: $0.450000, Size: 5.000000 | Total orders: 13, Unfilled: 13
-[2026-02-25T01:30:03Z] ✅ SIMULATION: Order verified stored - Key: 94083258428610481154187783709922
-[2026-02-25T01:30:03Z] 📋 SIMULATION: Limit BUY order added - Token: 89545186345668965841164306931808421082361509251510322308487037887825167886346 (Down), Price: $0.450000, Size: 5.000000 | Total orders: 14, Unfilled: 14
-[2026-02-25T01:30:03Z] ✅ SIMULATION: Order verified stored - Key: 89545186345668965841164306931808
-[2026-02-25T01:30:03Z] 📋 SIMULATION: Limit BUY order added - Token: 92308907220850459608046790935588114135025084943642637109568407463379768817428 (Up), Price: $0.450000, Size: 5.000000 | Total orders: 15, Unfilled: 15
-[2026-02-25T01:30:03Z] ✅ SIMULATION: Order verified stored - Key: 92308907220850459608046790935588
-[2026-02-25T01:30:03Z] 📋 SIMULATION: Limit BUY order added - Token: 71002979684242561690296632104476451918129869407582577325401364147365331912231 (Down), Price: $0.450000, Size: 5.000000 | Total orders: 16, Unfilled: 16
-[2026-02-25T01:30:03Z] ✅ SIMULATION: Order verified stored - Key: 71002979684242561690296632104476
+[2026-02-27T02:10:34Z] ⚠️  SIMULATION: No token IDs to fetch prices for
+[2026-02-27T02:10:35Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T02:10:35Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+
+[2026-02-27T02:10:35Z] ⚠️  SIMULATION: No token IDs to fetch prices for
+[2026-02-27T02:10:36Z] 🔄 SIMULATION: check_pending_trades called
+[2026-02-27T02:10:36Z] 📊 SIMULATION: Found 0 pending limit order(s) waiting for fills
+
+[2026-02-27T02:10:36Z] ⚠️  SIMULATION: No token IDs to fetch prices for

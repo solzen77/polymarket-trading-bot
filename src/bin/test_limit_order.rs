@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use rust_decimal::Decimal;
-use polymarket_arbitrage_bot::{PolymarketApi, Config, models::OrderRequest};
+use polymarket_trading_bot::{PolymarketApi, Config, models::OrderRequest};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Parser, Debug)]
