@@ -1,155 +1,309 @@
-# Polymarket Trading Bot
+# Polymarket Trading Bot (TypeScript)
 
-A Rust trading bot for [Polymarket](https://polymarket.com) that trades 15-minute (and 5-minute) price prediction markets using limit orders and trailing strategies.
+Polymarket trading bot (TypeScript) for 15-minute Up/Down crypto markets. Focuses on **reducing loss** for small and mid-size traders—not whale capital. At each new 15-minute period start, places limit buys for BTC and optionally ETH, Solana, XRP at a fixed price (default $0.45). Run in simulation or live on Polymarket CLOB.
+---
 
-**Features:**
-- **Dual Limit Same-Size (0.45)** — Place Up/Down limit buys at $0.45 at market start; hedge with market buy if only one fills (2-min / 4-min / early / standard).
-- **Dual Limit 5-Minute BTC** — Same idea for BTC 5-minute markets with time-based bands and trailing stop.
-- **Trailing Bot** — Wait for price &lt; 0.45, then trail with stop loss and trailing stop on the opposite side.
-- **Backtest** — Replay strategy on historical price data in `history/`.
-- **Test binaries** — Limit order, redeem, merge, allowance, sell, and prediction tests.
+## Background & Strategy Evolution
+
+I built a bunch of Polymarket bots over time. At first I tried **arbitrage**. It was safe and the logic was clear, but the edge was small and the profits were tiny. After running it for a while I realized it wasn't really worth the effort for the returns I was getting. So I switched to strategies that aimed for **bigger profit**. When they hit, the gains were nice. But when they didn't, the drawdowns were big. For someone without whale-sized capital, one bad run can wipe out a lot of earlier work. I had to accept that chasing big profit with small size usually means you get big loss on the other side too.
+
+I thought about it for a long time. If you're not a whale, you can't rely on volume to smooth out variance. The only thing that really helps is **reducing loss** — keeping each period's risk and cost under control so that a few bad outcomes don't blow up the account. So I focused on that. I studied the markets, ran a lot of tests and simulations, and ended up with the approach in this repo: **dual limit at period start**. You buy both Up and Down at a fixed price (e.g. $0.45) only in the first ~2 seconds of each new 15m period. No fancy entries, no chasing. Just cap the cost per period and stick to the plan. that’s a bad trade.
+
 
 ---
 
-**Watch the bot in action:**
+## Contact
 
-[![Polymarket Trading Bot Demo](https://img.youtube.com/vi/1nF556ypGXM/0.jpg)](https://youtu.be/1nF556ypGXM?si=3d4zmY6lKVj4fVhO)
-
----
-
-## Quick reference
-
-| Binary | Description |
-|--------|-------------|
-| `main_dual_limit_045_same_size` | Dual limit 0.45, same-size hedge (default) |
-| `main_dual_limit_045_5m_btc` | Dual limit 0.45, BTC 5-minute only |
-| `main_trailing` | Trailing stop bot |
-| `backtest` | Backtest on history files |
-| `test_*` | test_limit_order, test_redeem, test_merge, test_allowance, test_sell, test_predict_fun |
+- **Telegram:** [https://t.me/solzen77](https://t.me/solzen77)
 
 ---
 
-## Setup
+## Strategy Overview (Diagrams)
 
-1. **Install Rust** (if needed):
-   ```bash
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-   ```
+### Philosophy: From “Big Profit” to “Reduce Loss First”
 
-2. **Build:**
-   ```bash
-   cargo build --release
-   ```
-
-3. **Configure:** Copy `config.example.json` to `config.json` and set:
-   - `polymarket`: `api_key`, `api_secret`, `api_passphrase`, `private_key`
-   - Optional: `proxy_wallet_address`, `signature_type` (1 = POLY_PROXY, 2 = GNOSIS_SAFE)
-   - `trading`: enable flags, `dual_limit_price`, `dual_limit_shares`, hedge/trailing params, etc.
-
----
-
-## Bot versions
-
-### 1. Dual Limit Same-Size Bot (0.45) — default
-
-**Binary:** `main_dual_limit_045_same_size`
-
-At market start (first ~5 s), places limit buys for BTC and enabled ETH/SOL/XRP Up/Down at $0.45. If **both** fill → done for that market. If **only one** fills, applies a **2-min / 4-min / early / standard** hedge: buy the unfilled side at market (same size), cancel the unfilled $0.45 limit.
-
-**Low-price exit (0.05 / 0.99 or 0.02 / 0.99):** Two limit sells (cheap at $0.05 or $0.02, opposite at $0.99) are placed only when:
-1. At least **10 minutes** have elapsed.
-2. The market was hedged via **4-min, early, or standard** (not 2-min).
-3. One side’s **bid** is below 0.10 (or below 0.03 for the 0.02/0.99 path when hedge price &lt; 0.60).
-
-```bash
-# Simulation
-cargo run --bin main_dual_limit_045_same_size -- --simulation
-
-# Production (default binary)
-cargo run -- --no-simulation
+```mermaid
+flowchart LR
+  A[Arbitrage] -->|"Low profit"| B[High-risk / Big profit]
+  B -->|"Big loss too"| C[Reduce loss first]
+  C --> D[Current strategy: dual limit at period start]
+  style C fill:#e8f5e9
+  style D fill:#c8e6c9
 ```
 
-### 2. Dual Limit 5-Minute BTC Bot
+### When the Bot Places Orders (Decision Flow)
 
-**Binary:** `main_dual_limit_045_5m_btc`
-
-Dual limit at $0.45 for **BTC 5-minute markets only**. Two windows: **2-min** (2–3 min), **3-min** (≥3 min), with bands and trailing stop (e.g. buy when ask ≥ lowest_ask + 0.03).
-
-```bash
-cargo run --bin main_dual_limit_045_5m_btc -- --config config.json --simulation
-cargo run --bin main_dual_limit_045_5m_btc -- --config config.json --no-simulation
+```mermaid
+flowchart TD
+  Start([Every check_interval e.g. 1s]) --> Snapshot[Fetch order books + time remaining]
+  Snapshot --> T1{Time remaining > 0?}
+  T1 -->|No| Wait[Wait next tick]
+  T1 -->|Yes| T2{Period already seen?}
+  T2 -->|No| Wait
+  T2 -->|Yes| T3{First ~2s of period?}
+  T3 -->|No| Wait
+  T3 -->|Yes| T4{Not already placed this period?}
+  T4 -->|No| Wait
+  T4 -->|Yes| Place[Place limit buys: Up + Down at fixed price]
+  Place --> Wait
+  Wait --> Start
 ```
 
-### 3. Trailing Bot
+### End-to-End Data Flow
 
-**Binary:** `main_trailing`
+```mermaid
+flowchart TB
+  subgraph Init[Startup]
+    Config[Config + CLI]
+    Auth[Auth optional: wallet + CLOB]
+    Discover[Discover markets via Gamma API]
+    Config --> Auth --> Discover
+  end
 
-Waits until one token’s price is **under 0.45**, then trails that token (trailing stop with 0.45 cap). After the first buy, uses **stop loss + trailing stop** for the opposite token.
+  subgraph Loop[Main loop]
+    CLOB[CLOB order books]
+    Snapshot[Snapshot: prices, time_remaining]
+    Condition{First 2s of period & not placed?}
+    Opportunities[Build opportunities: Up/Down per asset]
+    Execute[Place limit buy or simulate]
+    CLOB --> Snapshot --> Condition
+    Condition -->|Yes| Opportunities --> Execute
+    Condition -->|No| CLOB
+  end
 
-```bash
-cargo run --bin main_trailing -- --simulation
-cargo run --bin main_trailing -- --no-simulation
-```
-
-### 4. Backtest
-
-**Binary:** `backtest`
-
-Replays the dual-limit strategy on `history/market_*_prices.toml`: limit buys at $0.45, simulated fills, hedge logic, PnL. Requires existing price history files.
-
-```bash
-cargo run --bin backtest -- --backtest
+  Discover --> Loop
 ```
 
 ---
 
-## Test binaries
+## Bot Logic (Detailed)
 
-| Binary | Purpose |
-|--------|---------|
-| `test_limit_order` | Place a limit order (e.g. `--price-cents 60 --shares 10`) |
-| `test_redeem` | List/redeem winning tokens (`--list`, `--redeem-all`) |
-| `test_merge` | Merge complete sets to USDC (`--merge`) |
-| `test_allowance` | Check balance/allowance; set approval (`--approve-only`, `--list`) |
-| `test_sell` | Test market sell |
-| `test_predict_fun` | Test prediction/price logic |
+### Strategy in one sentence
 
-Example:
+Every time a **new 15-minute market period starts**, the bot places **limit BUY** orders for **Up** and **Down** tokens of the selected assets (BTC always; ETH/SOL/XRP if enabled) at a **fixed limit price** (e.g. $0.45). No market orders; no selling in this bot.
+
+### Markets targeted
+
+- **Polymarket 15-minute Up/Down markets**: e.g. “Will BTC go up or down in the next 15 minutes?” Each period has two outcome tokens: **Up** (yes) and **Down** (no). The bot buys both at a fixed price at the start of the period.
+- **Period**: 900 seconds (15 min). Period boundaries are aligned to Unix time: `period_timestamp = floor(now / 900) * 900`.
+
+### Startup sequence
+
+1. **Config & CLI**  
+   Loads `config.json` and parses `--simulation` / `--no-simulation` and `-c <path>`. Simulation = no real orders; production = real CLOB orders.
+
+2. **Auth (if `private_key` set)**  
+   Builds an ethers wallet and CLOB client, optionally derives or creates API key. If auth fails and mode is simulation, the bot continues with read-only market data.
+
+3. **Market discovery**  
+   For each asset (BTC, and ETH/SOL/XRP if enabled), finds the **current** 15-min market by slug pattern:
+   - `{asset}-updown-15m-{period_timestamp}` (e.g. `btc-updown-15m-1739462400`).
+   - For BTC/ETH, also tries **previous** periods (up to 3 × 15 min back) if the current one isn’t found.
+   - Uses Polymarket **Gamma API** (event/market by slug) and ensures the market is active and not closed. Stores condition IDs and token IDs for Up/Down.
+
+4. **Main loop**  
+   Runs forever, every `check_interval_ms` (default 1 s):
+   - Fetches a **snapshot**: order book (best bid/ask) for each market’s Up and Down tokens via CLOB, plus **time remaining** in the current period (`end_time - now`).
+   - Logs a price line: e.g. `BTC: U$0.48/$0.52 D$0.45/$0.49 | ETH: ... | ⏱️ 14m 32s`.
+
+### When does the bot place orders?
+
+Orders are placed **only when all** of the following are true:
+
+1. **Time remaining > 0** (market not yet ended).
+2. **Period has been seen** (so we know we’re in a valid period).
+3. **"Just after" period start**: `time_elapsed = 900 - time_remaining` is **≤ 2 seconds**. So we act in the first ~2 seconds of the new period only.
+4. **Not already placed this period**: `lastPlacedPeriod !== current period`. So we place **once per period**, right after it starts.
+5. **There are opportunities**: at least one Up or Down token is available for the enabled markets (BTC + any of ETH/SOL/XRP that are enabled).
+
+If any of these fail, the loop just waits and repeats.
+
+### Buy point (when we buy)
+
+| What | Value |
+|------|--------|
+| **When** | First **0–2 seconds** after a new 15-minute period starts |
+| **Clock** | `time_remaining_seconds` between **898 and 900** (so `time_elapsed = 900 - time_remaining` is 0–2) |
+| **How often** | **Once per period** (then `lastPlacedPeriod` blocks until the next period) |
+| **Price** | Fixed limit: `trading.dual_limit_price` (e.g. **$0.45**) |
+| **Tokens** | One limit buy for **Up**, one for **Down**, for each enabled asset (e.g. BTC only if others disabled) |
+
+So the **buy point** is: as soon as the new 15-min window starts (first 2 seconds), the bot places all limit buys at the configured price, then does nothing else until the next period.
+
+### What gets traded (opportunities)
+
+- **BTC**: always — BTC Up and BTC Down (if the market has both tokens).
+- **ETH / Solana / XRP**: only if `enable_eth_trading` / `enable_solana_trading` / `enable_xrp_trading` are `true` in config.
+
+For each such token, the bot creates a **buy opportunity** (limit price from config, token ID, condition ID, period). It then tries to place a **limit buy** for each opportunity, **skipping** any (period, token type) for which it already has an active position in this run (to avoid duplicate orders in the same period).
+
+### Order execution (Trader)
+
+- **Limit price**: from `trading.dual_limit_price` (e.g. 0.45).
+- **Size (shares)**:
+  - If `trading.dual_limit_shares` is set → use that as the number of shares per order.
+  - Else → `fixed_trade_amount / bid_price` (e.g. $4.5 / 0.45 ≈ 10 shares).
+- **Simulation**: logs the order and records it in memory and in `history/YYYY-MM-DD.json`; no CLOB call.
+- **Production**: builds a CLOB client (with wallet + API creds), calls `createAndPostOrder` for a **GTC limit buy** at that price and size. Tracks the order in `pendingTrades` so we don’t double-place for the same (period, token type).
+
+### What this bot does **not** do
+
+- No **selling** or closing positions.
+- No **market orders** (only limit buys at a fixed price).
+- No **stop-loss**, **take-profit**, or **hedging** logic in the main loop (config has fields for them but they are unused in this dual-limit-start flow).
+- No **re-discovery** of markets inside the loop (markets are discovered once at startup).
+
+---
+
+## Running the Bot (All Users)
+
+### One-command run (recommended)
+
+This is the easiest way for normal users. It defaults to **simulation** (safe), creates `config.json` from `config.json.example` if missing, and makes live trading require an explicit confirmation.
+
 ```bash
-cargo run --bin test_allowance -- --approve-only   # One-time approval for selling
-cargo run --bin test_redeem -- --list
+npm install
+npm run bot
+```
+
+Optional:
+
+```bash
+# Force simulation (safe)
+npm run bot:simulation
+
+# Force live (will ask you to type LIVE, unless you add --yes-live)
+npm run bot:live
+
+# Use a different config path
+npm run bot -- -c path/to/config.json
+```
+
+### Requirements
+
+- Node.js >= 18
+- `config.json` with Polymarket `private_key` (and optional API creds) for real trading; **optional** for simulation
+
+### Setup
+
+```bash
+npm install
+cp config.json.example config.json   # or copy from Rust project
+# Edit config.json: set polymarket.private_key (hex, with or without 0x) for real trading
+```
+
+### Simulation (no real orders)
+
+Simulation runs the same logic as production but **never sends orders** to Polymarket. It logs each “would-be” order and keeps a running summary (order count, total notional).
+
+- **No `private_key` needed** for simulation: the bot can run with only `config.json` (or defaults) and will use read-only market data. CLOB auth is skipped if no key is set.
+- **Summary**: After each market start where orders would be placed, the bot logs:  
+  `Simulation summary (this run): N order(s), total notional $X.XX`
+- **History**: Each summary is appended to `history/YYYY-MM-DD.json` (one JSON object per line, by date). The `history/` folder is created automatically and is in `.gitignore`.
+
+```bash
+npm run simulation
+```
+
+### Real trading (production)
+
+Requires `config.json` with `polymarket.private_key` (and optionally API key/secret/passphrase). Places real limit orders on Polymarket.
+
+```bash
+npm run dev
+# or after build:
+npm run build && npm run start:live
+```
+
+### Config path
+
+```bash
+npx tsx src/main-dual-limit-045.ts -c /path/to/config.json
+```
+
+### Config
+
+Same shape as the Rust bot:
+
+- `polymarket.gamma_api_url`, `polymarket.clob_api_url` – API base URLs
+- `polymarket.private_key` – EOA private key (hex); **optional for simulation** (leave empty to run without CLOB auth)
+- `polymarket.proxy_wallet_address` – optional proxy/Magic wallet
+- `trading.dual_limit_price` – limit price (default 0.45)
+- `trading.dual_limit_shares` – optional fixed shares per order
+- `trading.enable_eth_trading`, `enable_solana_trading`, `enable_xrp_trading` – enable extra markets
+
+---
+
+## Strategy Test Results (Current Bot Logic)
+
+The following result uses the current 15-minute entry logic (period-start dual limit approach).
+
+### Overall
+
+| Metric | Value |
+|------|------:|
+| mode | 15m |
+| markets | 1,082 |
+| trades | 1,082 |
+| up_trades | 533 |
+| down_trades | 549 |
+| directional_accuracy | 53.05% |
+| win_rate | 53.05% |
+| avg_cost_per_trade | 50.3771 |
+| total_cost | 54508.0000 |
+| avg_pnl_per_trade | +2.6728 |
+| total_pnl | +2892.0000 |
+
+### Daily PnL (UTC)
+
+| Date | PnL | Trades | Win Rate |
+|------|----:|-------:|---------:|
+| 2026-03-06 | +116.0000 | 26 | 53.85% |
+| 2026-03-07 | +496.0000 | 96 | 56.25% |
+| 2026-03-08 | +38.0000 | 96 | 50.00% |
+| 2026-03-09 | +789.0000 | 96 | 59.38% |
+| 2026-03-10 | +217.0000 | 96 | 53.12% |
+| 2026-03-11 | +288.0000 | 96 | 53.12% |
+| 2026-03-12 | +274.0000 | 96 | 53.12% |
+| 2026-03-13 | -252.0000 | 96 | 46.88% |
+| 2026-03-14 | +68.0000 | 96 | 51.04% |
+| 2026-03-15 | +155.0000 | 96 | 52.08% |
+| 2026-03-16 | +278.0000 | 96 | 53.12% |
+| 2026-03-17 | +425.0000 | 96 | 55.21% |
+
+> Notes:
+> - These are strategy test/analysis results based on the current strategy logic, not a guarantee of future performance.
+> - Live performance can differ due to fill quality, latency, fees, liquidity, and market regime changes.
+
+### Generate this report from current bot data
+
+After running simulation/live and collecting order history in `history/`, generate the same style report:
+
+```bash
+npm run report:test
+```
+
+Optional:
+
+```bash
+# custom history directory
+npm run report:test -- --history-dir ./history
+
+# custom config (for gamma/clob API URLs)
+npm run report:test -- -c ./config.json
 ```
 
 ---
 
-## Configuration
+## Project layout
 
-- **`--simulation`** / **`--no-simulation`** — No real orders in simulation.
-- **`--config <path>`** — Config file (default: `config.json`).
+- `src/config.ts` – load config, parse CLI args (`--simulation` / `--no-simulation`, `-c` config path)
+- `src/logger.ts` – re-exports `jonas-prettier-logger`; all app logging uses `logger.info()`, `logger.warn()`, `logger.error()`, `logger.trace()`
+- `src/types.ts` – Market, Token, BuyOpportunity, MarketSnapshot
+- `src/api.ts` – Gamma API (market by slug), CLOB order book
+- `src/clob.ts` – CLOB client (ethers + @polymarket/clob-client), place limit order
+- `src/monitor.ts` – fetch snapshot (prices, time remaining)
+- `src/trader.ts` – hasActivePosition, executeLimitBuy, simulation tracking and `getSimulationSummary()`
+- `src/simulation-history.ts` – save simulation results to `history/YYYY-MM-DD.json` (NDJSON by date)
+- `src/main-dual-limit-045.ts` – discover markets, monitor loop, place limit orders at period start; logs and saves simulation summary when in simulation mode
 
-**Config fields (summary):**
-- **polymarket:** `gamma_api_url`, `clob_api_url`, `api_key`, `api_secret`, `api_passphrase`, `private_key`, optional `proxy_wallet_address`, `signature_type`.
-- **trading:** `check_interval_ms`, `fixed_trade_amount`, `enable_btc_trading` / `enable_eth_trading` / etc., `dual_limit_price` (0.45), `dual_limit_shares`, `dual_limit_hedge_*`, `trailing_stop_point`, `trailing_shares`, etc.
-
----
-
-## Notes
-
-- Bots run until you stop them (Ctrl+C).
-- Simulation mode logs trades but does not send orders.
-- **Before selling**, set on-chain approval once per proxy wallet:  
-  `cargo run --bin test_allowance -- --approve-only`
-
----
-
-## Security
-
-- Do **not** commit `config.json` with real keys or secrets.
-- Prefer simulation and small sizes when testing.
-- Monitor logs and balances when running in production.
-
-## Support
-
-If you have any questions or would like a more customized app for specific use cases, please feel free to contact us at the contact information below.
-- E-Mail: admin@hyperbuildx.com
-- Telegram: [@bettyjk_0915](https://t.me/bettyjk_0915)
